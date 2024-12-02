@@ -35,6 +35,63 @@ BLUE = (0, 0, 255)
 GREEN = (0, 255, 0)
 YELLOW = (255, 255, 0)
 
+# Sound Effects `````````````````````````````````````````````````````
+def load_sound_effects():
+    try:
+        sound_effects = {}
+        crash_path = Path(__file__).parent / 'assets' / 'sounds' / 'crash.wav'
+        if crash_path.exists():
+            sound_effects['crash'] = pygame.mixer.Sound(str(crash_path))
+            sound_effects['crash'].set_volume(0.7)  # Set volume (0.0 to 1.0)
+            logger.info("Crash sound effect loaded successfully.")
+        else:
+            logger.warning("Crash sound effect file not found.")
+        # Load throw sound `````````````````````````````````````````
+        throw_path = Path(__file__).parent / 'assets' / 'sounds' / 'throw.wav'
+        if throw_path.exists():
+            sound_effects['throw'] = pygame.mixer.Sound(str(throw_path))
+            sound_effects['throw'].set_volume(0.7)  # Set volume (0.0 to 1.0)
+            logger.info("Throw sound effect loaded successfully.")
+        else:
+            logger.warning("Throw sound effect file not found.")
+        # Load success sound ### 추가됨`````````````````````````````
+        success_path = Path(__file__).parent / 'assets' / 'sounds' / 'success.wav'
+        if success_path.exists():
+            sound_effects['success'] = pygame.mixer.Sound(str(success_path))
+            sound_effects['success'].set_volume(0.7)  # Set volume (0.0 to 1.0)
+            logger.info("Success sound effect loaded successfully.")
+        else:
+            logger.warning("Success sound effect file not found.")
+
+        return sound_effects
+    except pygame.error as e:
+        logger.error(f"Error loading sound effects: {e}")
+        return {}
+
+# background music'''''''''''''''''''''''''''''''''''''''''''''''``````
+def play_background_music():
+    try:
+        music_path = Path(__file__).parent / 'assets' / 'sounds' / 'back_sounds.wav'
+        if music_path.exists():
+            pygame.mixer.music.load(str(music_path))  # Load the music
+            pygame.mixer.music.set_volume(0.5)  # Set volume (0.0 to 1.0)
+            pygame.mixer.music.play(-1)  # Play music in a loop (-1 for infinite)
+            logger.info("Background music started successfully.")
+        else:
+            logger.warning("Background music file not found.")
+            # Load game over sound
+        game_over_path = Path(__file__).parent / 'assets' / 'sounds' / 'game_over.wav'
+        if game_over_path.exists():
+            sound_effects['game_over'] = pygame.mixer.Sound(str(game_over_path))
+            sound_effects['game_over'].set_volume(0.7)  # Set volume
+            logger.info("Game over sound effect loaded successfully.")
+        else:
+            logger.warning("Game over sound effect file not found.")
+
+            
+    except pygame.error as e:
+        logger.error(f"Error loading or playing background music: {e}")
+
 # Asset Loading
 def load_image(path):
     try:
@@ -285,6 +342,28 @@ class House(pygame.sprite.Sprite):
         if self.rect.right < 0:
             self.kill()
 
+
+class VolumeControl:  # 음소거 추가``````````````````````````````````````````````````````````````````````````````
+    def __init__(self, mute_icon_path, unmute_icon_path):
+        self.mute_icon = pygame.transform.scale(load_image(mute_icon_path), (30, 30))  # 미니 사이즈로 조정
+        self.unmute_icon = pygame.transform.scale(load_image(unmute_icon_path), (30, 30))  # 미니 사이즈로 조정
+        self.icon = self.unmute_icon  # Default to unmute
+        self.rect = self.icon.get_rect(topright=(SCREEN_WIDTH - 10, 10))  # 오른쪽 상단으로 위치 변경
+        self.is_muted = False
+
+    def toggle_mute(self):
+        self.is_muted = not self.is_muted
+        self.icon = self.mute_icon if self.is_muted else self.unmute_icon
+        pygame.mixer.music.set_volume(0 if self.is_muted else 0.5)
+
+    def draw(self, screen):
+        screen.blit(self.icon, self.rect.topleft)
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self.rect.collidepoint(event.pos):
+                self.toggle_mute()
+
 def main():
     try:
         # Game Setup
@@ -315,6 +394,12 @@ def main():
         paperboy = Paperboy()
         paperboy.rect.y = SCREEN_HEIGHT // 2  
         all_sprites.add(paperboy)
+
+        # Create volume control ````````````````````````````````````````````````````````````````````
+        volume_control = VolumeControl(
+            mute_icon_path=str(Path(__file__).parent / 'assets' / 'sounds' / 'mute.png'),
+            unmute_icon_path=str(Path(__file__).parent / 'assets' / 'sounds' / 'unmute.png')
+        )
         
         # Game Loop
         running = True
@@ -325,7 +410,7 @@ def main():
         
         while running:
             try:
-                # Event handling
+                # Event handling````````````````````````````````````````
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         running = False
@@ -336,10 +421,23 @@ def main():
                             newspaper = Newspaper(paperboy.rect.right, paperboy.rect.centery, True)
                             all_sprites.add(newspaper)
                             newspapers.add(newspaper)
+                             # Play throw sound effect````````````````````````````
+                            if 'throw' in sound_effects:
+                                sound_effects['throw'].play()
+                            else:
+                                logger.warning("Throw sound effect not loaded.")
+                            
                         elif event.key == pygame.K_RIGHT:  
                             newspaper = Newspaper(paperboy.rect.right, paperboy.rect.centery, False)
                             all_sprites.add(newspaper)
                             newspapers.add(newspaper)
+                            # Play throw sound effect````````````````````````````
+                            if 'throw' in sound_effects:
+                                sound_effects['throw'].play()
+                            else:
+                                logger.warning("Throw sound effect not loaded.")
+                    #mute button event````````````````````````````
+                    volume_control.handle_event(event)
                 
                 # Movement
                 keys = pygame.key.get_pressed()
@@ -374,25 +472,50 @@ def main():
                             if (newspaper.is_top_throw and house.is_top_lane) or \
                                (not newspaper.is_top_throw and not house.is_top_lane):
                                 paperboy.score += 1
+                                # Play success sound effect ### 추가됨````````````````````
+                                if 'success' in sound_effects:
+                                    sound_effects['success'].play()
+                                else:
+                                    logger.warning("Success sound effect not loaded.")
+                                
                         newspaper.kill()
                 
-                # Invincibility and collision handling
+                # Invincibility and collision handling ### 추가됨``````````````````
                 if invincible_timer <= 0:
-                    if pygame.sprite.spritecollideany(paperboy, obstacles):
+                    collided_obstacle = pygame.sprite.spritecollideany(paperboy, obstacles)
+                    if collided_obstacle:
+                        # Play sound effect when a collision occurs
+                        if 'crash' in sound_effects:
+                            sound_effects['crash'].play()  # Play the sound
+                        else:
+                            logger.warning("Crash sound effect not loaded or unavailable.")
+
+                        # Handle collision logic
                         paperboy.lives -= 1
                         if paperboy.lives <= 0:
-                            running = False
+                            # Play game over sound effect ##추가됨````````````````````````````````````````````````
+                            if 'game_over' in sound_effects:
+                                sound_effects['game_over'].play()  # Play the game over sound
+                            else:
+                                logger.warning("Game over sound effect not loaded.")
+                
+                            running = False  # End game
                         else:
+                            # Remove all obstacles upon collision
                             for obstacle in obstacles:
                                 obstacle.kill()
                             invincible_timer = INVINCIBLE_DURATION
                 else:
                     invincible_timer -= 1
                 
+                
                 # Drawing
                 screen.fill(WHITE)
                 background.draw(screen)
                 all_sprites.draw(screen)
+
+                # Draw volume control ``````````````````````````````````````````````````````````````````````````
+                volume_control.draw(screen)
                 
                 # UI
                 score_text = font.render(f'Score: {paperboy.score}', True, BLACK)
@@ -420,6 +543,13 @@ if __name__ == "__main__":
         # Create global asset loader
         asset_loader = AssetLoader()
         asset_loader.load_assets()  # Load all assets
+
+        # Load sound effects`````````````````````````````````````
+        sound_effects = load_sound_effects()
+        
+        # Start background music''''''''''''''''''''''''''''''''''
+        play_background_music()
+        
         main()
     except Exception as e:
         logger.error(f"Main function error: {e}")
